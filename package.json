@@ -15,7 +15,13 @@
     "lint": "tsc --noEmit",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["cli", "browser", "web", "ai", "playwright"],
+  "keywords": [
+    "cli",
+    "browser",
+    "web",
+    "ai",
+    "playwright"
+  ],
   "author": "jackwener",
   "license": "MIT",
   "repository": {
