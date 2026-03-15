@@ -1,5 +1,11 @@
 /**
  * CLI discovery: finds YAML/TS CLI definitions and registers them.
+ *
+ * Supports two modes:
+ * 1. FAST PATH (manifest): If a pre-compiled cli-manifest.json exists,
+ *    registers all YAML commands instantly without runtime YAML parsing.
+ *    TS modules are loaded lazily only when their command is executed.
+ * 2. FALLBACK (filesystem scan): Traditional runtime discovery for development.
  */
 
 import * as fs from 'node:fs';
@@ -9,25 +15,99 @@ import { type CliCommand, type Arg, Strategy, registerCommand } from './registry
 import type { IPage } from './types.js';
 import { executePipeline } from './pipeline.js';
 
+/** Set of TS module paths that have been loaded */
+const _loadedModules = new Set<string>();
+
+/**
+ * Discover and register CLI commands.
+ * Uses pre-compiled manifest when available for instant startup.
+ */
 export async function discoverClis(...dirs: string[]): Promise<void> {
-  const promises: Promise<any>[] = [];
+  // Fast path: try manifest first (production / post-build)
   for (const dir of dirs) {
-    if (!fs.existsSync(dir)) continue;
-    for (const site of fs.readdirSync(dir)) {
-      const siteDir = path.join(dir, site);
-      if (!fs.statSync(siteDir).isDirectory()) continue;
-      for (const file of fs.readdirSync(siteDir)) {
-        const filePath = path.join(siteDir, file);
-        if (file.endsWith('.yaml') || file.endsWith('.yml')) {
-          registerYamlCli(filePath, site);
-        } else if (file.endsWith('.js')) {
-          // Dynamic import of compiled adapter modules
-          promises.push(
-            import(`file://${filePath}`).catch((err: any) => {
-              process.stderr.write(`Warning: failed to load module ${filePath}: ${err.message}\n`);
-            })
-          );
-        }
+    const manifestPath = path.resolve(dir, '..', 'cli-manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      loadFromManifest(manifestPath, dir);
+      continue; // Skip filesystem scan for this directory
+    }
+    // Fallback: runtime filesystem scan (development)
+    await discoverClisFromFs(dir);
+  }
+}
+
+/**
+ * Fast-path: register commands from pre-compiled manifest.
+ * YAML pipelines are inlined — zero YAML parsing at runtime.
+ * TS modules are deferred — loaded lazily on first execution.
+ */
+function loadFromManifest(manifestPath: string, clisDir: string): void {
+  try {
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as any[];
+    for (const entry of manifest) {
+      if (entry.type === 'yaml') {
+        // YAML pipelines fully inlined in manifest — register directly
+        const strategy = (Strategy as any)[entry.strategy.toUpperCase()] ?? Strategy.COOKIE;
+        const cmd: CliCommand = {
+          site: entry.site,
+          name: entry.name,
+          description: entry.description ?? '',
+          domain: entry.domain,
+          strategy,
+          browser: entry.browser,
+          args: entry.args ?? [],
+          columns: entry.columns,
+          pipeline: entry.pipeline,
+          timeoutSeconds: entry.timeout,
+          source: `manifest:${entry.site}/${entry.name}`,
+        };
+        registerCommand(cmd);
+      } else if (entry.type === 'ts' && entry.modulePath) {
+        // TS adapters: register a lightweight stub.
+        // The actual module is loaded lazily on first executeCommand().
+        const strategy = (Strategy as any)[(entry.strategy ?? 'cookie').toUpperCase()] ?? Strategy.COOKIE;
+        const modulePath = path.resolve(clisDir, entry.modulePath);
+        const cmd: CliCommand = {
+          site: entry.site,
+          name: entry.name,
+          description: entry.description ?? '',
+          domain: entry.domain,
+          strategy,
+          browser: entry.browser ?? true,
+          args: entry.args ?? [],
+          columns: entry.columns,
+          timeoutSeconds: entry.timeout,
+          source: modulePath,
+          // Mark as lazy — executeCommand will load the module before running
+          _lazy: true,
+          _modulePath: modulePath,
+        };
+        registerCommand(cmd);
+      }
+    }
+  } catch (err: any) {
+    process.stderr.write(`Warning: failed to load manifest ${manifestPath}: ${err.message}\n`);
+  }
+}
+
+/**
+ * Fallback: traditional filesystem scan (used during development with tsx).
+ */
+async function discoverClisFromFs(dir: string): Promise<void> {
+  if (!fs.existsSync(dir)) return;
+  const promises: Promise<any>[] = [];
+  for (const site of fs.readdirSync(dir)) {
+    const siteDir = path.join(dir, site);
+    if (!fs.statSync(siteDir).isDirectory()) continue;
+    for (const file of fs.readdirSync(siteDir)) {
+      const filePath = path.join(siteDir, file);
+      if (file.endsWith('.yaml') || file.endsWith('.yml')) {
+        registerYamlCli(filePath, site);
+      } else if (file.endsWith('.js')) {
+        promises.push(
+          import(`file://${filePath}`).catch((err: any) => {
+            process.stderr.write(`Warning: failed to load module ${filePath}: ${err.message}\n`);
+          })
+        );
       }
     }
   }
@@ -80,12 +160,38 @@ function registerYamlCli(filePath: string, defaultSite: string): void {
   }
 }
 
+/**
+ * Execute a CLI command. Handles lazy-loading of TS modules.
+ */
 export async function executeCommand(
   cmd: CliCommand,
   page: IPage | null,
   kwargs: Record<string, any>,
   debug: boolean = false,
 ): Promise<any> {
+  // Lazy-load TS module on first execution
+  if ((cmd as any)._lazy && (cmd as any)._modulePath) {
+    const modulePath = (cmd as any)._modulePath;
+    if (!_loadedModules.has(modulePath)) {
+      try {
+        await import(`file://${modulePath}`);
+        _loadedModules.add(modulePath);
+      } catch (err: any) {
+        throw new Error(`Failed to load adapter module ${modulePath}: ${err.message}`);
+      }
+    }
+    // After loading, the module's cli() call will have updated the registry
+    // with the real func/pipeline. Re-fetch the command.
+    const { getRegistry, fullName } = await import('./registry.js');
+    const updated = getRegistry().get(fullName(cmd));
+    if (updated && updated.func) {
+      return updated.func(page, kwargs, debug);
+    }
+    if (updated && updated.pipeline) {
+      return executePipeline(page, updated.pipeline, { args: kwargs, debug });
+    }
+  }
+
   if (cmd.func) {
     return cmd.func(page, kwargs, debug);
   }

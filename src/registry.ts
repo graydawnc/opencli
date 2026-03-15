@@ -34,6 +34,9 @@ export interface CliCommand {
   pipeline?: any[];
   timeoutSeconds?: number;
   source?: string;
+  /** Internal: lazy-loaded TS module support */
+  _lazy?: boolean;
+  _modulePath?: string;
 }
 
 export interface CliOptions {
