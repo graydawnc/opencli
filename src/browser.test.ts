@@ -1,51 +1,77 @@
-import { describe, expect, it } from 'vitest';
-import { formatBrowserConnectError, getTokenFingerprint } from './browser.js';
+import { describe, it, expect } from 'vitest';
+import { PlaywrightMCP, __test__ } from './browser.js';
 
-describe('getTokenFingerprint', () => {
-  it('returns null for empty token', () => {
-    expect(getTokenFingerprint(undefined)).toBeNull();
+describe('browser helpers', () => {
+  it('creates JSON-RPC requests with unique ids', () => {
+    const first = __test__.createJsonRpcRequest('tools/call', { name: 'browser_tabs' });
+    const second = __test__.createJsonRpcRequest('tools/call', { name: 'browser_snapshot' });
+
+    expect(second.id).toBe(first.id + 1);
+    expect(first.message).toContain(`"id":${first.id}`);
+    expect(second.message).toContain(`"id":${second.id}`);
   });
 
-  it('returns stable short fingerprint for token', () => {
-    expect(getTokenFingerprint('abc123')).toBe('6ca13d52');
+  it('extracts tab entries from string snapshots', () => {
+    const entries = __test__.extractTabEntries('Tab 0 https://example.com\nTab 1 Chrome Extension');
+
+    expect(entries).toEqual([
+      { index: 0, identity: 'https://example.com' },
+      { index: 1, identity: 'Chrome Extension' },
+    ]);
+  });
+
+  it('closes only tabs that were opened during the session', () => {
+    const tabsToClose = __test__.diffTabIndexes(
+      ['https://example.com', 'Chrome Extension'],
+      [
+        { index: 0, identity: 'https://example.com' },
+        { index: 1, identity: 'Chrome Extension' },
+        { index: 2, identity: 'https://target.example/page' },
+        { index: 3, identity: 'chrome-extension://bridge' },
+      ],
+    );
+
+    expect(tabsToClose).toEqual([3, 2]);
+  });
+
+  it('keeps only the tail of stderr buffers', () => {
+    expect(__test__.appendLimited('12345', '67890', 8)).toBe('34567890');
+  });
+
+  it('times out slow promises', async () => {
+    await expect(__test__.withTimeout(new Promise(() => {}), 10, 'timeout')).rejects.toThrow('timeout');
   });
 });
 
-describe('formatBrowserConnectError', () => {
-  it('explains missing extension token clearly', () => {
-    const err = formatBrowserConnectError({
-      kind: 'missing-token',
-      mode: 'extension',
-      timeout: 30,
-      hasExtensionToken: false,
-    });
+describe('PlaywrightMCP state', () => {
+  it('transitions to closed after close()', async () => {
+    const mcp = new PlaywrightMCP();
 
-    expect(err.message).toContain('PLAYWRIGHT_MCP_EXTENSION_TOKEN is not set');
-    expect(err.message).toContain('manual approval dialog');
+    expect(mcp.state).toBe('idle');
+
+    await mcp.close();
+
+    expect(mcp.state).toBe('closed');
   });
 
-  it('mentions token mismatch as likely cause for extension timeout', () => {
-    const err = formatBrowserConnectError({
-      kind: 'extension-timeout',
-      mode: 'extension',
-      timeout: 30,
-      hasExtensionToken: true,
-      tokenFingerprint: 'deadbeef',
-    });
+  it('rejects connect() after the session has been closed', async () => {
+    const mcp = new PlaywrightMCP();
+    await mcp.close();
 
-    expect(err.message).toContain('does not match the token currently shown by the browser extension');
-    expect(err.message).toContain('deadbeef');
+    await expect(mcp.connect()).rejects.toThrow('Playwright MCP session is closed');
   });
 
-  it('keeps CDP timeout guidance separate', () => {
-    const err = formatBrowserConnectError({
-      kind: 'cdp-timeout',
-      mode: 'cdp',
-      timeout: 30,
-      hasExtensionToken: false,
-    });
+  it('rejects connect() while already connecting', async () => {
+    const mcp = new PlaywrightMCP();
+    (mcp as any)._state = 'connecting';
 
-    expect(err.message).toContain('via CDP');
-    expect(err.message).toContain('chrome://inspect#remote-debugging');
+    await expect(mcp.connect()).rejects.toThrow('Playwright MCP is already connecting');
+  });
+
+  it('rejects connect() while closing', async () => {
+    const mcp = new PlaywrightMCP();
+    (mcp as any)._state = 'closing';
+
+    await expect(mcp.connect()).rejects.toThrow('Playwright MCP is closing');
   });
 });
