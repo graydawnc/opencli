@@ -8,7 +8,7 @@ Based on the successful automation of **Cursor**, **Codex**, **Antigravity**, **
 
 ## Core Concept
 
-Electron apps are essentially local Chromium browser instances. By exposing a debugging port (CDP — Chrome DevTools Protocol) at launch time, we can use Playwright to pierce through the UI layer, accessing and controlling all underlying state including React/Vue components and Shadow DOM.
+Electron apps are essentially local Chromium browser instances. By exposing a debugging port (CDP — Chrome DevTools Protocol) at launch time, we can use the Browser Bridge to pierce through the UI layer, accessing and controlling all underlying state including React/Vue components and Shadow DOM.
 
 > **Note:** Not all desktop apps are Electron. WeChat (native Cocoa) and Feishu/Lark (custom Lark Framework) embed Chromium but do NOT expose CDP. For those apps, use the AppleScript + clipboard approach instead (see [Non-Electron Pattern](#non-electron-pattern-applescript)).
 
@@ -109,7 +109,7 @@ Core techniques:
 ## Pitfalls & Gotchas
 
 1. **Port conflicts (EADDRINUSE)**: Only one app per port. Use unique ports: Codex=9222, ChatGPT=9224, Cursor=9226, ChatWise=9228, Notion=9230, Discord=9232
-2. **IPage abstraction**: OpenCLI wraps Playwright Page as `IPage` (`src/types.ts`). Use `page.pressKey()` and `page.evaluate()`, NOT `page.keyboard.press()`
+2. **IPage abstraction**: OpenCLI wraps the browser page as `IPage` (`src/types.ts`). Use `page.pressKey()` and `page.evaluate()`, NOT direct DOM APIs
 3. **Timing**: Always add `await page.wait(0.5)` to `1.0` after DOM mutations. Returning too early disconnects prematurely
 4. **AppleScript requires Accessibility**: Terminal app must be granted permission in System Settings → Privacy & Security → Accessibility
 

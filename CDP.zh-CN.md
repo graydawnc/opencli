@@ -1,6 +1,6 @@
 # 通过 CDP 远程连接 OpenCLI (服务器/无头环境)
 
-如果你无法使用 Playwright MCP Bridge 浏览器扩展（例如：在无界面的远程服务器上运行 OpenCLI 时），OpenCLI 提供了备选方案：通过连接 **CDP (Chrome DevTools Protocol，即 Chrome 开发者工具协议)** 来直接控制本地 Chrome。
+如果你无法使用 opencli Browser Bridge 浏览器扩展（例如：在无界面的远程服务器上运行 OpenCLI 时），OpenCLI 提供了备选方案：通过连接 **CDP (Chrome DevTools Protocol，即 Chrome 开发者工具协议)** 来直接控制本地 Chrome。
 
 出于安全考虑，CDP 默认仅绑定在 `localhost` 的本地端口。所以，若是想让**远程服务器**调用本地的 CDP 服务，我们需要依靠一层额外的网络隧道。
 

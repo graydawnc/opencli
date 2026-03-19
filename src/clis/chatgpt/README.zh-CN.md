@@ -35,7 +35,7 @@ export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 ## 工作原理
 
 - **AppleScript 模式**：使用 `osascript` 和 `pbcopy`/`pbpaste` 进行剪贴板文本传输，无需远程调试端口。
-- **CDP 模式**：通过 Playwright 连接到 Electron 渲染进程，直接操作 DOM。
+- **CDP 模式**：通过 Chrome DevTools Protocol 连接到 Electron 渲染进程，直接操作 DOM。
 
 ## 限制
 

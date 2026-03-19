@@ -105,10 +105,10 @@ npx vitest src/
 
 ### 浏览器命令本地测试须知
 
-- 无 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 时，opencli 自动启动一个独立浏览器实例
+- opencli 通过 Browser Bridge 扩展连接已运行的 Chrome 浏览器
 - `browser-public.test.ts` 使用 `tryBrowserCommand()`，站点反爬导致空数据时 warn + pass
 - `browser-auth.test.ts` 验证 **graceful failure**（不 crash 不 hang 即通过）
-- 如需测试完整登录态，保持 Chrome 登录态 + 设置 `PLAYWRIGHT_MCP_EXTENSION_TOKEN`，手动跑对应测试
+- 如需测试完整登录态，保持 Chrome 登录态并安装 Browser Bridge 扩展，手动跑对应测试
 
 ---
 
@@ -202,12 +202,12 @@ steps:
 
 ## 浏览器模式
 
-opencli 根据 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 环境变量自动选择模式：
+opencli 通过 Browser Bridge 扩展连接浏览器：
 
-| 条件 | 模式 | MCP 参数 | 使用场景 |
-|---|---|---|---|
-| Token 已设置 | Extension 模式 | `--extension` | 本地用户，连接已登录的 Chrome |
-| Token 未设置 | Standalone 模式 | （无特殊 flag） | CI 或无扩展环境，自启浏览器 |
+| 条件 | 模式 | 使用场景 |
+|---|---|---|
+| 扩展已安装 | Extension 模式 | 本地用户，连接已登录的 Chrome |
+| 扩展未安装 | CLI 报错提示安装 | 需要安装 Browser Bridge 扩展 |
 
 CI 中使用 `OPENCLI_BROWSER_EXECUTABLE_PATH` 指定真实 Chrome 路径：
 

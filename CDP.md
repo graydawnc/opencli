@@ -1,6 +1,6 @@
 # Connecting OpenCLI via CDP (Remote/Headless Servers)
 
-If you cannot use the Playwright MCP Bridge extension (e.g., in a remote headless server environment without a UI), OpenCLI provides an alternative: connecting directly to Chrome via **CDP (Chrome DevTools Protocol)**.
+If you cannot use the opencli Browser Bridge extension (e.g., in a remote headless server environment without a UI), OpenCLI provides an alternative: connecting directly to Chrome via **CDP (Chrome DevTools Protocol)**.
 
 Because CDP binds to `localhost` by default for security reasons, accessing it from a remote server requires an additional networking tunnel.
 

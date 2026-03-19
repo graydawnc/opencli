@@ -35,7 +35,7 @@ export OPENCLI_CDP_ENDPOINT="http://127.0.0.1:9224"
 ## How It Works
 
 - **AppleScript mode**: Uses `osascript` and `pbcopy`/`pbpaste` for clipboard-based text transfer. No remote debugging port needed.
-- **CDP mode**: Connects via Playwright to the Electron renderer process for direct DOM manipulation.
+- **CDP mode**: Connects via Chrome DevTools Protocol to the Electron renderer process for direct DOM manipulation.
 
 ## Limitations
 
